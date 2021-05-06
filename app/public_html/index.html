@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>HW 5</title>
+</head>
+<body>
+    <style>
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+            height:25px;
+            padding-top: 5px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #input{
+            margin: auto;
+            text-align: center;
+        }
+        #buttonContainer{
+            margin-top: 5px;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+        div{
+            text-align: center;
+        }
+        h1{
+            text-align: center;
+        }
+        table{
+            margin-top: 10px;
+        }
+      </style>
+      <h1> Five Day Forecast</h1>
+      <div id="input">
+        <label for="zip">Zip code:</label>
+        <input id="zip" type="number" value="19104">
+    </div>
+
+<div id="buttonContainer">
+    <button id="submit">Get five day forecast</button>
+</div>
+
+<div id="error_message">
+</div>
+
+<div id="table_container">
+    <table id="main_table">
+        <tr>
+            <th>Date</th>
+            <th>Forecast</th>
+            <th>Temperature</th>
+        </tr>
+    </table>
+</div>
+
+<script>
+    // Reusing most of the code from the exercise from thursday's in-class exercise week 4
+
+    // retrieve the zip code from the input field
+    let zip;
+    let zipInput = document.getElementById("zip");
+
+    // each time the user enters text inside the input field
+    function storeZipInputInGlobal() {
+        // if user entered invalid number, return
+        if (zipInput.value === "") {
+            return;
+        }
+        zip = parseInt(zipInput.value);
+    }
+    zipInput.addEventListener("input", storeZipInputInGlobal);
+    storeZipInputInGlobal(); // set global to default value: 19104
+    
+    // sends request to web server when button clicked
+    let submitButton = document.getElementById("submit");
+    submitButton.addEventListener("click", function () {
+        let url = `/forecast?zip=${zip}`; 
+
+        //Make a fetch API request to the url /forecast with the query string zip
+        fetch(url).then(function (response) {
+
+            //If the response is a 200 OK then generate the table to display the datetime, weather forecast, and the
+            //temperature.
+            if (response.status === 200){
+                response.json().then(function (data) {
+                    
+                    //Extra Credit part that will display the city name based on the input zip code
+                    let errorDiv = document.getElementById("error_message");
+                    errorDiv.textContent = `Five day forecast for: ${data.city}`;
+
+                    //Removing the old data from the table if there was data that was requested by the client prior 
+                    if (document.getElementsByClassName("dataRows").length != 0){
+                        resetTable();
+                    }
+
+                    let table = document.getElementById("main_table");
+
+                    //Generating the html table with all the necessary data
+                    for (let object in data.fiveDayForecast){
+                        let tr = document.createElement("tr");
+                        tr.className = "dataRows";
+
+                        let td = document.createElement("td");
+
+                        let date = data.fiveDayForecast[object].dt_txt;
+                        let dayTime = parseInt(date.split(" ")[1].split(":")[0]) > 12 ? "AM" : "PM";
+
+                        //For Extra Credit portion which involves displaying the complete date with the day of the week,
+                        //year, month, day, and the time of the forecast
+                        let dateObject = new Date(parseInt(date.split("-")[0]), parseInt(date.split("-")[1]) - 1, parseInt(date.split("-")[2]), 
+                         date.split(" ")[1].split(":")[0], date.split(" ")[1].split(":")[1], 0)
+
+                        let dateYear = dateObject.getFullYear();
+
+                        //Citing: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getMonth
+                        var options = { month: 'long'};
+                        let dateMonth = new Intl.DateTimeFormat('en-US', options).format(dateObject);
+
+                        //Citing: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date/getDay
+                        var options = { weekday: 'long'};
+                        let dateDay = new Intl.DateTimeFormat('en-US', options).format(dateObject);
+
+                        let dateDate = dateObject.getDate().toLocaleString('en-US', {minimumIntegerDigits: 2, useGrouping:false});
+                        let dateHour = dateObject.getHours() % 12;
+                        if (dateHour == 0){
+                            dateHour = 12;
+                        }
+                        dateHour = dateHour.toLocaleString('en-US', {minimumIntegerDigits: 2, useGrouping:false});
+                        let dateMinutes = dateObject.getMinutes().toLocaleString('en-US', {minimumIntegerDigits: 2, useGrouping:false});
+
+                        let dateOutput = `${dateDay}, ${dateDate} ${dateMonth} ${dateYear} @ ${dateHour}:${dateMinutes} ${dayTime}`;
+
+                        td.textContent = dateOutput;
+                        tr.appendChild(td);
+
+                        td = document.createElement("td");
+                        td.textContent = data.fiveDayForecast[object].weather_description;
+
+                        //Extra Credit part which involved adding an img icon alongside the weather description
+                        let iconCode = data.fiveDayForecast[object].icon;
+                        let img = document.createElement("img");
+                        img.src = `http://openweathermap.org/img/wn/${iconCode}@2x.png`
+                        img.width = "55";
+                        img.style.verticalAlign = "middle";
+                        td.appendChild(img);
+                        tr.appendChild(td);
+
+                        td = document.createElement("td");
+                        td.textContent = Math.round(convertToFahrenheit(data.fiveDayForecast[object].temperature_kelvin) * 100) / 100 + " F";
+                        tr.appendChild(td);
+
+                        table.appendChild(tr);
+                    }
+
+                })
+            }
+            //When the response status is not 200 then display an error message from the response error key
+            //provided from the API
+            else{
+                response.json().then(function (data) {
+                    resetTable();
+                    let errorDiv = document.getElementById("error_message");
+                    errorDiv.textContent = data.error;
+                })
+            }
+            //Catch any other error that may arise from the fetch and log it
+            }).catch(function (error) {
+                // log the error
+                console.log(error);
+            });
+
+    });
+
+    function convertToFahrenheit(kelvin){
+        return (((kelvin - 273.15) * 9) / 5) + 32;
+
+    }
+    //This function removes any of the data from the previous request and leaves only the header
+    function resetTable(){
+        let table = document.getElementById("main_table");
+        table.remove();
+
+        let tableDiv = document.getElementById("table_container");
+        let newTable = document.createElement("table");
+        newTable.setAttribute('id', 'main_table');
+
+        let headerRow = document.createElement("tr")
+        let dateHeader = document.createElement("th");
+        dateHeader.textContent = "Date";
+    
+        let forecastHeader = document.createElement("th");
+        forecastHeader.textContent = "Forecast";
+
+        let tempHeader = document.createElement("th");
+        tempHeader.textContent = "Temperature";
+
+        headerRow.appendChild(dateHeader);
+        headerRow.appendChild(forecastHeader);
+        headerRow.appendChild(tempHeader);
+        newTable.appendChild(headerRow);
+        tableDiv.appendChild(newTable);
+    }
+    
+    </script>
+
+</body>
+</html>
+
